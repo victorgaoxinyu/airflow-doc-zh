@@ -13,55 +13,89 @@
 Airflow 教程代码位于:
 https://github.com/apache/airflow/blob/master/airflow/example_dags/tutorial.py
 """
-from airflow import DAG
-from airflow.operators.bash_operator import BashOperator
 from datetime import datetime, timedelta
+from textwrap import dedent
 
-default_args = {
-    'owner': 'airflow',
-    'depends_on_past': False,
-    'start_date': datetime(2015, 6, 1),
-    'email': ['airflow@example.com'],
-    'email_on_failure': False,
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=5),
-    # 'queue': 'bash_queue',
-    # 'pool': 'backfill',
-    # 'priority_weight': 10,
-    # 'end_date': datetime(2016, 1, 1),
-}
+# DAG 对象；我们需要用这个来实例化一个DAG
+from airflow import DAG
+# Operators；我们需要这个来执行操作！
+from airflow.operators.bash_operator import BashOperator
 
-dag = DAG('tutorial', default_args=default_args, schedule_interval=timedelta(days=1))
+with DAG(
+    'tutorial',
+    # 这些参数会被传入每一个operator中
+    # 你可以在operator初始化的时候把每一个任务的参数进行覆写
+    default_args={
+        'depends_on_past': False,
+        'email': ['airflow@example.com'],
+        'email_on_failure': False,
+        'email_on_retry': False,
+        'retries': 1,
+        'retry_delay': timedelta(minutes=5),
+        # 'queue': 'bash_queue',
+        # 'pool': 'backfill',
+        # 'priority_weight': 10,
+        # 'end_date': datetime(2016, 1, 1),
+        # 'wait_for_downstream': False,
+        # 'sla': timedelta(hours=2),
+        # 'execution_timeout': timedelta(seconds=300),
+        # 'on_failure_callback': some_function,
+        # 'on_success_callback': some_other_function,
+        # 'on_retry_callback': another_function,
+        # 'sla_miss_callback': yet_another_function,
+        # 'trigger_rule': 'all_success'
+    },
+    description='A simple tutorial DAG',
+    schedule_interval=timedelta(days=1),
+    start_date=datetime(2021, 1, 1),
+    catchup=False,
+    tags=['example'],
+) as dag:
 
-# t1、t2 和 t3 是通过实例化 Operators 创建的任务示例
-t1 = BashOperator(
-    task_id='print_date',
-    bash_command='date',
-    dag=dag)
+    # t1、t2 和 t3 是通过实例化 Operators 创建的任务示例
 
-t2 = BashOperator(
-    task_id='sleep',
-    bash_command='sleep 5',
-    retries=3,
-    dag=dag)
+    t1 = BashOperator(
+        task_id='print_date',
+        bash_command='date',
+    )
 
-templated_command = """
-    { % for i in range(5) %}
+    t2 = BashOperator(
+        task_id='sleep',
+        depends_on_past=False,
+        bash_command='sleep 5',
+        retries=3,
+    )
+    t1.doc_md = dedent(
+        """\
+    #### Task Documentation
+    You can document your task using the attributes `doc_md` (markdown),
+    `doc` (plain text), `doc_rst`, `doc_json`, `doc_yaml` which gets
+    rendered in the UI's Task Instance Details page.
+    ![img](http://montcs.bloomu.edu/~bobmon/Semesters/2012-01/491/import%20soul.png)
+
+    """
+    )
+
+    dag.doc_md = __doc__  # providing that you have a docstring at the beginning of the DAG
+    dag.doc_md = """
+    This is a documentation placed anywhere
+    """  # otherwise, type it like this
+    templated_command = dedent(
+        """
+    {% for i in range(5) %}
         echo "{{ ds }}"
         echo "{{ macros.ds_add(ds, 7)}}"
-        echo "{{ params.my_param }}"
-    { % end for %}
-"""
+    {% endfor %}
+    """
+    )
 
-t3 = BashOperator(
-    task_id='templated',
-    bash_command=templated_command,
-    params={'my_param': 'Parameter I passed in'},
-    dag=dag)
+    t3 = BashOperator(
+        task_id='templated',
+        depends_on_past=False,
+        bash_command=templated_command,
+    )
 
-t2.set_upstream(t1)
-t3.set_upstream(t1)
+    t1 >> [t2, t3]
 ```
 
 ## 这是一个 DAG 定义文件
@@ -75,12 +109,16 @@ t3.set_upstream(t1)
 一个 Airflow 的 pipeline 就是一个 Python 脚本，这个脚本的作用是为了定义 Airflow 的 DAG 对象。让我们首先导入我们需要的库。
 
 ```py
+from datetime import datetime, timedelta
+from textwrap import dedent
+
 # DAG 对象; 我们将需要它来实例化一个 DAG
 from airflow import DAG
 
 # Operators; 我们需要利用这个对象去执行流程!
-from airflow.operators.bash_operator import BashOperator
+from airflow.operators.bash import BashOperator
 ```
+参阅模块管理([Modules Management](??))来具体了解Python和Airflow是如何管理模块的。
 
 ## 默认参数
 
